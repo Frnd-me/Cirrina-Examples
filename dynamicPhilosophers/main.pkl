@@ -1,5 +1,5 @@
 amends
-  "https://raw.githubusercontent.com/CollaborativeStateMachines/Cirrina/refs/heads/develop/src/main/resources/pkl/csm/csml.pkl"
+"https://raw.githubusercontent.com/CollaborativeStateMachines/Cirrina/refs/heads/develop/src/main/resources/pkl/csm/csml.pkl"
 
 local n = 12
 
@@ -20,20 +20,14 @@ collaborativeStateMachine {
                       of = "leftNeighbor != 'none' && !hasLeftFork && !leftRequested"
                       yields {
                         new Eval { expression = "leftRequested = true" }
-                        new Emit {
-                          event { topic = "requestRightFork" }
-                          target = "leftNeighbor"
-                        }
+                        new Emit { event { topic = "requestRightFork" }; target = "leftNeighbor" }
                       }
                     }
                     new Case {
                       of = "rightNeighbor != 'none' && !hasRightFork && !rightRequested"
                       yields {
                         new Eval { expression = "rightRequested = true" }
-                        new Emit {
-                          event { topic = "requestLeftFork" }
-                          target = "rightNeighbor"
-                        }
+                        new Emit { event { topic = "requestLeftFork" }; target = "rightNeighbor" }
                       }
                     }
                   }
@@ -44,69 +38,61 @@ collaborativeStateMachine {
 
             ["tryEat"] {
               to = "eating"
-              provided =
-                "(leftNeighbor == 'none' || hasLeftFork) && (rightNeighbor == 'none' || hasRightFork)"
+              provided = "(leftNeighbor == 'none' || hasLeftFork) && (rightNeighbor == 'none' || hasRightFork) && !(leftNeighbor == 'none' && rightNeighbor == 'none')"
             }
+
             ["giveLeftFork"] {
               yields {
-                new Eval {
-                  expression = "hasLeftFork = true; leftForkDirty = false; leftRequested = false"
-                }
+                new Eval { expression = "hasLeftFork = true; leftForkDirty = false; leftRequested = false" }
                 new Emit { event = new Internal { topic = "tryEat" } }
               }
             }
             ["giveRightFork"] {
               yields {
-                new Eval {
-                  expression = "hasRightFork = true; rightForkDirty = false; rightRequested = false"
-                }
+                new Eval { expression = "hasRightFork = true; rightForkDirty = false; rightRequested = false" }
                 new Emit { event = new Internal { topic = "tryEat" } }
               }
             }
+
             ["requestLeftFork"] {
               yields {
                 new Match {
                   cases {
                     new Case {
-                      of = "hasLeftFork && !leftForkDirty"
+                      of = "hasLeftFork && leftForkDirty"
                       yields {
-                        new Eval { expression = "leftPending = true" }
+                        new Eval { expression = "hasLeftFork = false; leftPending = false" }
+                        new Emit { event { topic = "giveRightFork" }; target = "leftNeighbor" }
+                        new Emit { event = new Internal { topic = "evaluateRequests" } }
                       }
                     }
                     new Case {
-                      of = "hasLeftFork && leftForkDirty"
+                      of = "!(hasLeftFork && leftForkDirty)"
                       yields {
-                        new Eval { expression = "hasLeftFork = false" }
-                        new Emit {
-                          event { topic = "giveRightFork" }
-                          target = "leftNeighbor"
-                        }
-                        new Emit { event = new Internal { topic = "evaluateRequests" } }
+                        new Eval { expression = "leftPending = true" }
                       }
                     }
                   }
                 }
               }
             }
+
             ["requestRightFork"] {
               yields {
                 new Match {
                   cases {
                     new Case {
-                      of = "hasRightFork && !rightForkDirty"
+                      of = "hasRightFork && rightForkDirty"
                       yields {
-                        new Eval { expression = "rightPending = true" }
+                        new Eval { expression = "hasRightFork = false; rightPending = false" }
+                        new Emit { event { topic = "giveLeftFork" }; target = "rightNeighbor" }
+                        new Emit { event = new Internal { topic = "evaluateRequests" } }
                       }
                     }
                     new Case {
-                      of = "hasRightFork && rightForkDirty"
+                      of = "!(hasRightFork && rightForkDirty)"
                       yields {
-                        new Eval { expression = "hasRightFork = false" }
-                        new Emit {
-                          event { topic = "giveLeftFork" }
-                          target = "rightNeighbor"
-                        }
-                        new Emit { event = new Internal { topic = "evaluateRequests" } }
+                        new Eval { expression = "rightPending = true" }
                       }
                     }
                   }
@@ -116,9 +102,17 @@ collaborativeStateMachine {
 
             ["join"] {
               yields {
-                new Eval {
-                  expression =
-                    "rightNeighbor = $id; hasRightFork = false; rightRequested = false; rightPending = false"
+                new Eval { expression = "rightNeighbor = $id; hasRightFork = true; rightForkDirty = true" }
+                new Match {
+                  cases {
+                    new Case {
+                      of = "rightPending"
+                      yields {
+                        new Eval { expression = "hasRightFork = false; rightPending = false" }
+                        new Emit { event { topic = "giveLeftFork" }; target = "rightNeighbor" }
+                      }
+                    }
+                  }
                 }
                 new Emit { event = new Internal { topic = "evaluateRequests" } }
               }
@@ -138,52 +132,37 @@ collaborativeStateMachine {
             ["ate"] {
               to = "thinking"
               yields {
-                new Eval {
-                  expression = "++meals; leftForkDirty = true; rightForkDirty = true"
-                }
+                new Eval { expression = "++meals; leftForkDirty = true; rightForkDirty = true" }
                 new Ctr { counter = "philosopher.meals"; tags { ["id"] = "id.toString()" } }
                 new Match {
                   cases {
                     new Case {
-                      of = "leftNeighbor != 'none' && leftPending && hasLeftFork"
+                      of = "leftPending && hasLeftFork"
                       yields {
                         new Eval { expression = "hasLeftFork = false; leftPending = false" }
-                        new Emit {
-                          event { topic = "giveRightFork" }
-                          target = "leftNeighbor"
-                        }
+                        new Emit { event { topic = "giveRightFork" }; target = "leftNeighbor" }
                       }
                     }
+                  }
+                }
+                new Match {
+                  cases {
                     new Case {
-                      of = "rightNeighbor != 'none' && rightPending && hasRightFork"
+                      of = "rightPending && hasRightFork"
                       yields {
                         new Eval { expression = "hasRightFork = false; rightPending = false" }
-                        new Emit {
-                          event { topic = "giveLeftFork" }
-                          target = "rightNeighbor"
-                        }
+                        new Emit { event { topic = "giveLeftFork" }; target = "rightNeighbor" }
                       }
                     }
                   }
                 }
               }
             }
-            ["requestLeftFork"] {
-              yields {
-                new Eval { expression = "leftPending = true" }
-              }
-            }
-            ["requestRightFork"] {
-              yields {
-                new Eval { expression = "rightPending = true" }
-              }
-            }
+            ["requestLeftFork"] { yields { new Eval { expression = "leftPending = true" } } }
+            ["requestRightFork"] { yields { new Eval { expression = "rightPending = true" } } }
             ["join"] {
               yields {
-                new Eval {
-                  expression =
-                    "rightNeighbor = $id; hasRightFork = false; rightRequested = false; rightPending = false"
-                }
+                new Eval { expression = "rightNeighbor = $id; hasRightFork = true; rightForkDirty = true" }
               }
             }
           }
@@ -198,43 +177,57 @@ collaborativeStateMachine {
           }
           on {
             ["thought"] { to = "hungry" }
-
             ["requestLeftFork"] {
               yields {
                 new Match {
                   cases {
                     new Case {
-                      of = "hasLeftFork && !leftForkDirty"
+                      of = "hasLeftFork"
                       yields {
-                        new Eval { expression = "leftPending = true" }
+                        new Eval { expression = "hasLeftFork = false; leftPending = false" }
+                        new Emit { event { topic = "giveRightFork" }; target = "leftNeighbor" }
                       }
                     }
                     new Case {
-                      of = "hasLeftFork && leftForkDirty"
+                      of = "!hasLeftFork"
                       yields {
-                        new Eval { expression = "hasLeftFork = false" }
-                        new Emit { event { topic = "giveRightFork" }; target = "leftNeighbor" }
+                        new Eval { expression = "leftPending = true" }
                       }
                     }
                   }
                 }
               }
             }
-
             ["requestRightFork"] {
               yields {
                 new Match {
                   cases {
                     new Case {
-                      of = "hasRightFork && !rightForkDirty"
+                      of = "hasRightFork"
+                      yields {
+                        new Eval { expression = "hasRightFork = false; rightPending = false" }
+                        new Emit { event { topic = "giveLeftFork" }; target = "rightNeighbor" }
+                      }
+                    }
+                    new Case {
+                      of = "!hasRightFork"
                       yields {
                         new Eval { expression = "rightPending = true" }
                       }
                     }
+                  }
+                }
+              }
+            }
+            ["join"] {
+              yields {
+                new Eval { expression = "rightNeighbor = $id; hasRightFork = true; rightForkDirty = true" }
+                new Match {
+                  cases {
                     new Case {
-                      of = "hasRightFork && rightForkDirty"
+                      of = "rightPending"
                       yields {
-                        new Eval { expression = "hasRightFork = false" }
+                        new Eval { expression = "hasRightFork = false; rightPending = false" }
                         new Emit { event { topic = "giveLeftFork" }; target = "rightNeighbor" }
                       }
                     }
@@ -242,30 +235,8 @@ collaborativeStateMachine {
                 }
               }
             }
-
-            ["join"] {
-              yields {
-                new Eval {
-                  expression =
-                    "rightNeighbor = $id; hasRightFork = false; rightRequested = false; rightPending = false"
-                }
-              }
-            }
-
-            ["giveLeftFork"] {
-              yields {
-                new Eval {
-                  expression = "hasLeftFork = true; leftForkDirty = false; leftRequested = false"
-                }
-              }
-            }
-            ["giveRightFork"] {
-              yields {
-                new Eval {
-                  expression = "hasRightFork = true; rightForkDirty = false; rightRequested = false"
-                }
-              }
-            }
+            ["giveLeftFork"] { yields { new Eval { expression = "hasLeftFork = true; leftForkDirty = false" } } }
+            ["giveRightFork"] { yields { new Eval { expression = "hasRightFork = true; rightForkDirty = false" } } }
           }
         }
       }
@@ -282,19 +253,8 @@ collaborativeStateMachine {
             }
           }
           on {
-            ["nodeCreated"] {
-              to = "wait"
-              yields {
-                new Eval {
-                  expression = "--count"
-                }
-              }
-            }
-            ["increment"] {
-              yields {
-                new Eval { expression = "lastInstantiated += \(n)" }
-              }
-            }
+            ["nodeCreated"] { to = "wait"; yields { new Eval { expression = "--count" } } }
+            ["increment"] { yields { new Eval { expression = "lastInstantiated += \(n)" } } }
           }
         }
         ["instantiate"] = new State {
@@ -314,19 +274,14 @@ collaborativeStateMachine {
                       stateMachineName = "philosopher"
                       data {
                         ["id"] = "lastInstantiated"
-                        ["leftNeighbor"] =
-                          "lastInstantiated == 0 ? 'none' : 'instantiated' + (lastInstantiated - 1).toString()"
+                        ["leftNeighbor"] = "lastInstantiated == 0 ? 'none' : 'instantiated' + (lastInstantiated - 1).toString()"
                         ["rightNeighbor"] = "'none'"
-
-                        ["hasLeftFork"] = "lastInstantiated > 0"
+                        ["hasLeftFork"] = "false"
                         ["hasRightFork"] = "false"
-
                         ["leftForkDirty"] = "true"
                         ["rightForkDirty"] = "true"
-
                         ["leftRequested"] = "false"
                         ["rightRequested"] = "false"
-
                         ["leftPending"] = "false"
                         ["rightPending"] = "false"
                       }
@@ -339,10 +294,7 @@ collaborativeStateMachine {
                       of = "lastInstantiated > 0"
                       yields {
                         new Emit {
-                          event {
-                            topic = "join"
-                            data { ["id"] = "'instantiated' + lastInstantiated.toString()" }
-                          }
+                          event { topic = "join"; data { ["id"] = "'instantiated' + lastInstantiated.toString()" } }
                           target = "'instantiated' + (lastInstantiated - 1).toString()"
                         }
                       }
@@ -364,11 +316,7 @@ instances {
   for (i in IntSeq(0, n - 1)) {
     ["instantiator\(i)"] {
       stateMachineName = "instantiator"
-      data {
-        ["id"] = "\(i)"
-        ["count"] = "\(i)"
-        ["lastInstantiated"] = "\(i)"
-      }
+      data { ["id"] = "\(i)"; ["count"] = "\(i)"; ["lastInstantiated"] = "\(i)" }
     }
   }
 }
