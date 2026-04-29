@@ -23,6 +23,9 @@ This repository contains the following use case implementations:
 - [Dining Philosophers](diningPhilosophers)<br>
   Classic synchronization problem illustrating resource allocation and deadlock avoidance ([More info](https://en.wikipedia.org/wiki/Dining_philosophers_problem)).
 
+- [Dynamic Philosophers](dynamicPhilosophers)<br>
+  A variant of the decentralized Dining Philosophers Chandy-Misra solution allowing for adding philosophers ([More info](https://en.wikipedia.org/wiki/Dining_philosophers_problem)).
+
 - [Sleeping Barber](sleepingBarber)<br>
   Inter-process communication problem involving a finite waiting room and a shared resource ([More info](https://en.wikipedia.org/wiki/Sleeping_barber_problem)).
 
